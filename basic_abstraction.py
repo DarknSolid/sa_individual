@@ -1,3 +1,4 @@
+import networkx
 import networkx as nx
 import matplotlib.pyplot as plt
 from imports_finder import *
@@ -113,10 +114,36 @@ def dependencies_digraph(nodes: List[Node], filterMaster: FilterMaster):
     return G
 
 
-def draw_graph_with_labels(G, weights, figsize=(10, 10)):
+### formatr
+def format_list(G: networkx.DiGraph, nodes: List[Node], input_list, default_value):
+    """
+    formats a list of info for nodes, e.g. node_size. This is required as there does not exist a node for each import.
+    Specificlly: there may be more nodes in the graph than in the list of nodes used to create the graph.
+    This method formats the list of data to be of same length
+    :param G: the final graph to draw
+    :param nodes: the list of nodes used to create the graph
+    :param input_list: the list of data for each node
+    :param default_value: a default value to add to the new items in the formatted list which are not part of the input nodes
+    :return: the formatted list
+    """
+    new_list = []
+    count = 0
+    for node in G.nodes:
+        # check if it is in the nodes list
+        is_not_an_import = any(n.module_name == node for n in nodes)
+        if is_not_an_import:
+            new_list.append(input_list[count])
+            count += 1
+        else:
+            new_list.append(default_value)
+
+    return new_list
+
+
+def draw_graph_with_labels(G, node_sizes, figsize=(10, 10)):
     plt.figure(figsize=figsize)
     nx.draw(G,
-            node_size=weights,
+            node_size=node_sizes,
             with_labels=True,
             node_color='#00d4e9')
     plt.show()
@@ -125,14 +152,20 @@ def draw_graph_with_labels(G, weights, figsize=(10, 10)):
 fm = FilterMaster()
 # is_system_module:
 fm.add_node_condition(lambda node: node.module_name.startswith("zeeguu."))
+# only show internal dependencies
 fm.add_graph_condition(lambda name: name.startswith("zeeguu."))
 
 nodes = create_nodes()
-nodes_merged = merge_nodes_to_top_level(nodes=nodes, depth=2)
-nodes_filtered = keep_nodes(nodes_merged, filterMaster=fm)
-for node in nodes_filtered:
-    print(f'{node.lines_of_code}: {node.module_name}')
-DG = dependencies_digraph(nodes=nodes_filtered, filterMaster=fm)
+nodes = merge_nodes_to_top_level(nodes=nodes, depth=2)
+nodes = keep_nodes(nodes, filterMaster=fm)
 
-weights = [n.lines_of_code for n in nodes_filtered]
-draw_graph_with_labels(DG, weights=weights, figsize=(8, 4))
+DG = dependencies_digraph(nodes=nodes, filterMaster=fm)
+
+
+node_sizes = [n.lines_of_code for n in nodes]
+
+
+node_sizes = format_list(DG, nodes, node_sizes, 0)
+
+
+draw_graph_with_labels(DG, node_sizes=node_sizes, figsize=(8, 4))
