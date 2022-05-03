@@ -4,33 +4,29 @@ from imports_finder import *
 from pathlib import Path
 from typing import List, Set
 from utils import *
-from module_metrics import module_LOC
+from module_metrics import get_LOC_of_file
 
 
 class Node:
-    def __init__(self, module_name: str, imports: Set[str], LOC: int):
+    def __init__(self, file_path: str, module_name: str, imports: Set[str], lines_of_code: int):
+        self.file_path = file_path
         self.module_name = module_name
-        self.LOC = LOC
+        self.lines_of_code = lines_of_code
         self.imports = imports
 
 
 def create_nodes():
     files = Path(CODE_ROOT_FOLDER).rglob("*.py")
-    nodes = dict()
+    nodes = []
     for file in files:
         file_path = str(file)
         imports = imports_from_file(file_path)
         module_name = module_name_from_file_path(file_path)
-        loc = module_LOC(module_name)
+        lines_of_code = get_LOC_of_file(file_path)
 
-        if module_name not in nodes:
-            nodes[module_name] = Node(module_name=module_name, imports=imports, LOC=loc)
-        else:
-            node = nodes.get(module_name)
-            node.imports.update(imports)
-            node.LOC += loc
+        nodes.append(Node(file_path=file_path, module_name=module_name, imports=imports, lines_of_code=lines_of_code))
 
-    return [v for k,v in nodes.items()]
+    return nodes
 
 
 def dependencies_digraph_2(nodes: List[Node]):
@@ -109,6 +105,11 @@ fm = FilterMaster()
 #fm.add_condition(lambda item: item.startswith("zeeguu."))
 
 nodes = create_nodes()
+# merge nodes based on depth
+
+for node in nodes:
+    print(f'{node.lines_of_code} - {node.module_name}')
+
 DG = dependencies_digraph_2(nodes=nodes)
 ADG = abstracted_to_top_level(DG)
 system_ADG = keep_nodes(ADG, filterMaster=fm)
