@@ -59,44 +59,45 @@ def merge_nodes_to_top_level(nodes: List[Node], depth=1) -> List[Node]:
                 new_imports.add(top_level_import)
         node.imports = new_imports
 
-    return [v for k, v in merged.items()]
+    return ls
 
 
 class FilterMaster:
     def __init__(self):
-        self._conditions = []
+        self._node_conditions = []
+        self._graph_conditions = []
 
-    def add_condition(self, condition):
-        self._conditions.append(condition)
+    def add_node_condition(self, condition):
+        self._node_conditions.append(condition)
 
-    def run(self, item) -> bool:
+    def add_graph_condition(self, condition):
+        self._graph_conditions.append(condition)
+
+    def runNode(self, node:Node) -> bool:
         # all conditions must pass
-        for condition in self._conditions:
-            if not condition(item):
+        for condition in self._node_conditions:
+            if not condition(node):
+                return False
+        return True
+
+    def runGraphNode(self, node:str) -> bool:
+        # all conditions must pass
+        for condition in self._graph_conditions:
+            if not condition(node):
                 return False
         return True
 
 
-def keep_nodes(inputGraph, filterMaster):
-    result = nx.DiGraph()
+def keep_nodes(nodes: List[Node], filterMaster):
+    filtered_nodes = []
 
-    for each in inputGraph.edges():
-        src = each[0]
-        dst = each[1]
-
-        if filterMaster.run(src):
-            result.add_node(src)
-
-        if filterMaster.run(dst):
-            result.add_node(dst)
-
-        if filterMaster.run(src) and filterMaster.run(dst):
-            result.add_edge(src, dst)
-
-    return result
+    for node in nodes:
+        if filterMaster.runNode(node):
+            filtered_nodes.append(node)
+    return filtered_nodes
 
 
-def dependencies_digraph(nodes: List[Node]):
+def dependencies_digraph(nodes: List[Node], filterMaster: FilterMaster):
     G = nx.DiGraph()
 
     for node in nodes:
@@ -104,7 +105,10 @@ def dependencies_digraph(nodes: List[Node]):
             G.add_node(node.module_name)
 
         for imp in node.imports:
-            G.add_edge(node.module_name, imp)
+            # an import should have an edge drawn from the node if the import is a node
+            is_imp_a_node = any(n.module_name == imp for n in nodes)
+            if is_imp_a_node or filterMaster.runGraphNode(imp):
+                G.add_edge(node.module_name, imp)
 
     return G
 
@@ -117,11 +121,12 @@ def draw_graph_with_labels(G, figsize=(10, 10)):
 
 fm = FilterMaster()
 # is_system_module:
-#fm.add_condition(lambda item: item.startswith("zeeguu."))
+fm.add_node_condition(lambda node: node.module_name.startswith("zeeguu."))
+fm.add_graph_condition(lambda name: name.startswith("zeeguu."))
 
 nodes = create_nodes()
-nodes_merged = merge_nodes_to_top_level(nodes=nodes, depth=1)
-
-DG = dependencies_digraph(nodes=nodes_merged)
-system_ADG = keep_nodes(DG, filterMaster=fm)
-draw_graph_with_labels(system_ADG, (8, 4))
+nodes_merged = merge_nodes_to_top_level(nodes=nodes, depth=3)
+nodes_filtered = keep_nodes(nodes_merged, filterMaster=fm)
+DG = dependencies_digraph(nodes=nodes_filtered, filterMaster=fm)
+#system_ADG = keep_nodes(DG, filterMaster=fm)
+draw_graph_with_labels(DG, (8, 4))
