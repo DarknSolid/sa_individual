@@ -113,9 +113,12 @@ def dependencies_digraph(nodes: List[Node], filterMaster: FilterMaster):
     return G
 
 
-def draw_graph_with_labels(G, figsize=(10, 10)):
+def draw_graph_with_labels(G, weights, figsize=(10, 10)):
     plt.figure(figsize=figsize)
-    nx.draw(G, with_labels=True, node_color='#00d4e9')
+    nx.draw(G,
+            node_size=weights,
+            with_labels=True,
+            node_color='#00d4e9')
     plt.show()
 
 
@@ -125,8 +128,11 @@ fm.add_node_condition(lambda node: node.module_name.startswith("zeeguu."))
 fm.add_graph_condition(lambda name: name.startswith("zeeguu."))
 
 nodes = create_nodes()
-nodes_merged = merge_nodes_to_top_level(nodes=nodes, depth=3)
+nodes_merged = merge_nodes_to_top_level(nodes=nodes, depth=2)
 nodes_filtered = keep_nodes(nodes_merged, filterMaster=fm)
+for node in nodes_filtered:
+    print(f'{node.lines_of_code}: {node.module_name}')
 DG = dependencies_digraph(nodes=nodes_filtered, filterMaster=fm)
-#system_ADG = keep_nodes(DG, filterMaster=fm)
-draw_graph_with_labels(DG, (8, 4))
+
+weights = [n.lines_of_code for n in nodes_filtered]
+draw_graph_with_labels(DG, weights=weights, figsize=(8, 4))
