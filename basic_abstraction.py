@@ -29,35 +29,37 @@ def create_nodes():
     return nodes
 
 
-def dependencies_digraph_2(nodes: List[Node]):
-    G = nx.DiGraph()
-
-    for node in nodes:
-        if node.module_name not in G.nodes:
-            G.add_node(node.module_name)
-
-        for imp in node.imports:
-            G.add_edge(node.module_name, imp)
-
-    return G
-
-
 def top_level_module(module_name, depth=1):
     components = module_name.split(".")
     r = ".".join(components[:depth])
     return r
 
 
-def abstracted_to_top_level(G):
-    aG = nx.DiGraph()
-    for each in G.edges():
-        src = top_level_module(each[0])
-        dst = top_level_module(each[1])
+def merge_nodes_to_top_level(nodes: List[Node], depth=1) -> List[Node]:
+    merged = dict()
 
-        if src != dst:
-            aG.add_edge(src, dst)
+    for node in nodes:
+        new_module_name = top_level_module(node.module_name, depth)
+        node.module_name = new_module_name
 
-    return aG
+        if new_module_name not in merged:
+            merged[new_module_name] = node
+        else:
+            existing_node = merged.get(new_module_name)
+            existing_node.lines_of_code += node.lines_of_code
+            existing_node.imports.update(node.imports)
+
+    # fix imports
+    ls = [v for k, v in merged.items()]
+    for node in ls:
+        new_imports = set()
+        for imp in node.imports:
+            top_level_import = top_level_module(imp, depth)
+            if top_level_import != node.module_name:
+                new_imports.add(top_level_import)
+        node.imports = new_imports
+
+    return [v for k, v in merged.items()]
 
 
 class FilterMaster:
@@ -94,6 +96,19 @@ def keep_nodes(inputGraph, filterMaster):
     return result
 
 
+def dependencies_digraph(nodes: List[Node]):
+    G = nx.DiGraph()
+
+    for node in nodes:
+        if node.module_name not in G.nodes:
+            G.add_node(node.module_name)
+
+        for imp in node.imports:
+            G.add_edge(node.module_name, imp)
+
+    return G
+
+
 def draw_graph_with_labels(G, figsize=(10, 10)):
     plt.figure(figsize=figsize)
     nx.draw(G, with_labels=True, node_color='#00d4e9')
@@ -105,13 +120,8 @@ fm = FilterMaster()
 #fm.add_condition(lambda item: item.startswith("zeeguu."))
 
 nodes = create_nodes()
-# merge nodes based on depth
+nodes_merged = merge_nodes_to_top_level(nodes=nodes, depth=1)
 
-for node in nodes:
-    print(f'{node.lines_of_code} - {node.module_name}')
-
-DG = dependencies_digraph_2(nodes=nodes)
-ADG = abstracted_to_top_level(DG)
-system_ADG = keep_nodes(ADG, filterMaster=fm)
+DG = dependencies_digraph(nodes=nodes_merged)
+system_ADG = keep_nodes(DG, filterMaster=fm)
 draw_graph_with_labels(system_ADG, (8, 4))
-
