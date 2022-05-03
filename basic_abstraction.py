@@ -30,7 +30,7 @@ def create_nodes():
             node.imports.update(imports)
             node.LOC += loc
 
-    return nodes
+    return [v for k,v in nodes.items()]
 
 
 def dependencies_digraph_2(nodes: List[Node]):
@@ -46,31 +46,7 @@ def dependencies_digraph_2(nodes: List[Node]):
     return G
 
 
-def dependencies_digraph():
-    files = Path(CODE_ROOT_FOLDER).rglob("*.py")
-
-    G = nx.DiGraph()
-
-    for file in files:
-        file_path = str(file)
-        module_name = module_name_from_file_path(file_path)
-        if module_name not in G.nodes:
-            G.add_node(module_name)
-
-        for each in imports_from_file(file_path):
-            G.add_edge(module_name, each)
-
-    return G
-
-
-# a function to draw a graph
-def draw_graph(G, size, **args):
-    plt.figure(figsize=size)
-    nx.draw(G, **args)
-    plt.show()
-
-
-def top_level_module(module_name, depth=2):
+def top_level_module(module_name, depth=1):
     components = module_name.split(".")
     r = ".".join(components[:depth])
     return r
@@ -130,9 +106,11 @@ def draw_graph_with_labels(G, figsize=(10, 10)):
 
 fm = FilterMaster()
 # is_system_module:
-fm.add_condition(lambda item: item.startswith("zeeguu."))
+#fm.add_condition(lambda item: item.startswith("zeeguu."))
 
-DG = dependencies_digraph()
+nodes = create_nodes()
+DG = dependencies_digraph_2(nodes=nodes)
 ADG = abstracted_to_top_level(DG)
 system_ADG = keep_nodes(ADG, filterMaster=fm)
 draw_graph_with_labels(system_ADG, (8, 4))
+
