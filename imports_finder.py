@@ -1,6 +1,6 @@
 # naïve way of extracting imports using regular expressions
 import re
-from typing import Set
+from typing import List
 
 
 # we assume that imports are always at the
@@ -22,8 +22,8 @@ def import_from_line(line):
 
 # extracts all the imported modules from a file
 # returns a module of the form zeeguu_core.model.bookmark, e.g.
-def imports_from_file(file) -> Set[str]:
-    all_imports = set()
+def imports_from_file(file) -> List[str]:
+    all_imports = []
 
     lines = [line for line in open(file)]
 
@@ -31,6 +31,6 @@ def imports_from_file(file) -> Set[str]:
         imp = import_from_line(line)
 
         if imp:
-            all_imports.add(imp)
+            all_imports.append(imp)
 
     return all_imports

@@ -34,3 +34,12 @@ def colorFader(c1, c2, mix=0):  # fade (linear interpolate) from color c1 (at mi
     c1 = np.array(mpl.colors.to_rgb(c1))
     c2 = np.array(mpl.colors.to_rgb(c2))
     return mpl.colors.to_hex((1 - mix) * c1 + mix * c2)
+
+
+import networkx as nx
+
+G = nx.MultiDiGraph()
+G.add_edge(0,1, label='A')
+G.add_edge(1,0, label='B')
+G.add_edge(2,3, label='foo')
+G.add_edge(3,1, label='bar')

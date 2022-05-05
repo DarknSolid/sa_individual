@@ -11,7 +11,7 @@ from collections import defaultdict
 
 
 class Node:
-    def __init__(self, file_path: str, module_name: str, imports: Set[str], lines_of_code: int, code_churn: int, total_commits: int):
+    def __init__(self, file_path: str, module_name: str, imports: defaultdict, lines_of_code: int, code_churn: int, total_commits: int):
         self.file_path = file_path
         self.module_name = module_name
         self.lines_of_code = lines_of_code
@@ -29,7 +29,10 @@ def create_nodes():
         file_path = str(file)
 
         gitHubMetrics = file_path_to_github_metrics.get(file_path[14:]) # removes the ../zeeguu-api/ prefix
-        imports = imports_from_file(file_path)
+        imports_list = imports_from_file(file_path)
+        imports = defaultdict(lambda: 0)
+        for imp in imports_list:
+            imports[imp] = imports[imp] + 1
         module_name = module_name_from_file_path(file_path)
         lines_of_code = get_LOC_of_file(file_path)
 
@@ -57,18 +60,21 @@ def merge_nodes_to_top_level(nodes: List[Node], depth=1) -> List[Node]:
         else:
             existing_node = merged.get(new_module_name)
             existing_node.lines_of_code += node.lines_of_code
-            existing_node.imports.update(node.imports)
+
+            for k, v in node.imports.items():
+                existing_node.imports[k] = existing_node.imports[k] + v
+
             existing_node.code_churn += node.code_churn
             existing_node.total_commits += node.total_commits
 
     # fix imports
     ls = [v for k, v in merged.items()]
     for node in ls:
-        new_imports = set()
-        for imp in node.imports:
-            top_level_import = top_level_module(imp, depth)
+        new_imports = defaultdict(lambda :0)
+        for k,v in node.imports.items():
+            top_level_import = top_level_module(k, depth)
             if top_level_import != node.module_name:
-                new_imports.add(top_level_import)
+                new_imports[top_level_import] = new_imports[top_level_import] + v
         node.imports = new_imports
 
     return ls
@@ -110,22 +116,22 @@ def keep_nodes(nodes: List[Node], filterMaster):
 
 
 def dependencies_digraph(nodes: List[Node], filterMaster: FilterMaster):
-    G = nx.DiGraph()
+    G = nx.MultiDiGraph()
 
     for node in nodes:
         if node.module_name not in G.nodes:
             G.add_node(node.module_name)
 
-        for imp in node.imports:
+        for imp, references in node.imports.items():
             # an import should have an edge drawn from the node if the import is a node
             is_imp_a_node = any(n.module_name == imp for n in nodes)
             if is_imp_a_node or filterMaster.runGraphNode(imp):
-                G.add_edge(node.module_name, imp)
+                G.add_edge(node.module_name, imp, references=references)
 
     return G
 
 
-def generate_graph_compatible_node_property_list(graph: networkx.DiGraph, node_property_extractor, nodes: List[Node], default_value):
+def generate_graph_compatible_node_property_list(graph: networkx.MultiDiGraph, node_property_extractor, nodes: List[Node], default_value):
     node_to_value = defaultdict(lambda: default_value)
     for node in nodes:
         node_to_value[node.module_name] = node_property_extractor(node)
@@ -136,7 +142,7 @@ def generate_graph_compatible_node_property_list(graph: networkx.DiGraph, node_p
     return result
 
 
-def generate_node_colors_from_code_churn(graph: networkx.DiGraph, nodes: List[Node]):
+def generate_node_colors_from_code_churn(graph: networkx.MultiDiGraph, nodes: List[Node]):
     code_churns = [n.code_churn for n in nodes]
     limit = max(code_churns)
     module_to_color = dict()
@@ -148,23 +154,33 @@ def generate_node_colors_from_code_churn(graph: networkx.DiGraph, nodes: List[No
 
 
 def draw_graph_with_labels(G, node_sizes, node_color='#00d4e9', figsize=(10, 10)):
+    pos = nx.spring_layout(G)
     plt.figure(figsize=figsize)
     nx.draw(G,
             node_size=node_sizes,
+            pos=pos,
             with_labels=True,
             node_color=node_color,
             )
+
+    nx.draw_networkx_edge_labels(
+        G,
+        pos,
+        edge_labels=dict([((n1, n2), d['references'])
+                          for n1, n2, d in G.edges(data=True)]),
+        label_pos=0.15,
+    )
     plt.show()
 
 
 fm = FilterMaster()
 # is_system_module:
-#fm.add_node_condition(lambda node: node.module_name.startswith("zeeguu."))
+fm.add_node_condition(lambda node: node.module_name.startswith("zeeguu."))
 # only show internal dependencies
-#fm.add_graph_condition(lambda name: name.startswith("zeeguu."))
+fm.add_graph_condition(lambda name: name.startswith("zeeguu."))
 
 nodes = create_nodes()
-nodes = merge_nodes_to_top_level(nodes=nodes, depth=1)
+nodes = merge_nodes_to_top_level(nodes=nodes, depth=2)
 nodes = keep_nodes(nodes, filterMaster=fm)
 
 DG = dependencies_digraph(nodes=nodes, filterMaster=fm)
