@@ -132,7 +132,7 @@ def generate_graph_compatible_node_property_list(graph: networkx.DiGraph, node_p
 
     result = []
     for node in graph.nodes:
-        result.append(node_to_value.get(node))
+        result.append(node_to_value[node])
     return result
 
 
@@ -161,7 +161,7 @@ fm = FilterMaster()
 # is_system_module:
 #fm.add_node_condition(lambda node: node.module_name.startswith("zeeguu."))
 # only show internal dependencies
-fm.add_graph_condition(lambda name: name.startswith("zeeguu."))
+#fm.add_graph_condition(lambda name: name.startswith("zeeguu."))
 
 nodes = create_nodes()
 nodes = merge_nodes_to_top_level(nodes=nodes, depth=1)
