@@ -5,27 +5,35 @@ from imports_finder import *
 from pathlib import Path
 from typing import List, Set
 from utils import *
-from module_metrics import get_LOC_of_file
+from datetime import datetime, timedelta
+from module_metrics import get_LOC_of_file, FileGitHubMetrics, fetch_vsc_info
 
 
 class Node:
-    def __init__(self, file_path: str, module_name: str, imports: Set[str], lines_of_code: int):
+    def __init__(self, file_path: str, module_name: str, imports: Set[str], lines_of_code: int, code_churn: int, total_commits: int):
         self.file_path = file_path
         self.module_name = module_name
         self.lines_of_code = lines_of_code
         self.imports = imports
+        self.code_churn = code_churn
+        self.total_commits = total_commits
 
 
 def create_nodes():
     files = Path(CODE_ROOT_FOLDER).rglob("*.py")
+    since = datetime.today() - timedelta(days=365*10) # ten years from now
+    file_path_to_github_metrics = fetch_vsc_info(since=since)
     nodes = []
     for file in files:
         file_path = str(file)
+
+        gitHubMetrics = file_path_to_github_metrics.get(file_path[14:]) # removes the ../zeeguu-api/ prefix
         imports = imports_from_file(file_path)
         module_name = module_name_from_file_path(file_path)
         lines_of_code = get_LOC_of_file(file_path)
 
-        nodes.append(Node(file_path=file_path, module_name=module_name, imports=imports, lines_of_code=lines_of_code))
+        nodes.append(Node(file_path=file_path, module_name=module_name, imports=imports, lines_of_code=lines_of_code,
+                          code_churn=gitHubMetrics.code_churn, total_commits=gitHubMetrics.total_commits))
 
     return nodes
 
@@ -49,6 +57,8 @@ def merge_nodes_to_top_level(nodes: List[Node], depth=1) -> List[Node]:
             existing_node = merged.get(new_module_name)
             existing_node.lines_of_code += node.lines_of_code
             existing_node.imports.update(node.imports)
+            existing_node.code_churn += node.code_churn
+            existing_node.total_commits += node.total_commits
 
     # fix imports
     ls = [v for k, v in merged.items()]
@@ -114,7 +124,6 @@ def dependencies_digraph(nodes: List[Node], filterMaster: FilterMaster):
     return G
 
 
-### formatr
 def format_list(G: networkx.DiGraph, nodes: List[Node], input_list, default_value):
     """
     formats a list of info for nodes, e.g. node_size. This is required as there does not exist a node for each import.
@@ -141,6 +150,7 @@ def format_list(G: networkx.DiGraph, nodes: List[Node], input_list, default_valu
 
 
 def draw_graph_with_labels(G, node_sizes, figsize=(10, 10)):
+
     plt.figure(figsize=figsize)
     nx.draw(G,
             node_size=node_sizes,
