@@ -149,33 +149,44 @@ def format_list(G: networkx.DiGraph, nodes: List[Node], input_list, default_valu
     return new_list
 
 
-def draw_graph_with_labels(G, node_sizes, figsize=(10, 10)):
+def generate_node_colors_from_code_churn(nodes: List[Node]):
+    code_churns = [n.code_churn for n in nodes]
+    colors = []
+    limit = max(code_churns)
+    for churn in code_churns:
+        colors.append(blueToRedFade(churn, max=limit))
+    return format_list(DG, nodes, colors, '#00d4e9')
+
+
+def draw_graph_with_labels(G, node_sizes, node_color='#00d4e9', figsize=(10, 10)):
 
     plt.figure(figsize=figsize)
     nx.draw(G,
             node_size=node_sizes,
             with_labels=True,
-            node_color='#00d4e9')
+            node_color=node_color,
+            )
     plt.show()
 
 
 fm = FilterMaster()
 # is_system_module:
-fm.add_node_condition(lambda node: node.module_name.startswith("zeeguu."))
+#fm.add_node_condition(lambda node: node.module_name.startswith("zeeguu."))
 # only show internal dependencies
 fm.add_graph_condition(lambda name: name.startswith("zeeguu."))
 
 nodes = create_nodes()
-nodes = merge_nodes_to_top_level(nodes=nodes, depth=2)
+nodes = merge_nodes_to_top_level(nodes=nodes, depth=1)
 nodes = keep_nodes(nodes, filterMaster=fm)
 
 DG = dependencies_digraph(nodes=nodes, filterMaster=fm)
 
 
 node_sizes = [n.lines_of_code for n in nodes]
-
-
 node_sizes = format_list(DG, nodes, node_sizes, 0)
 
+node_colors = generate_node_colors_from_code_churn(nodes=nodes)
+for node in nodes:
+    print(f'{node.module_name}: {node.code_churn}')
 
-draw_graph_with_labels(DG, node_sizes=node_sizes, figsize=(8, 4))
+draw_graph_with_labels(DG, node_sizes=node_sizes, node_color=node_colors, figsize=(8, 4))

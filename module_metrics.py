@@ -15,9 +15,8 @@ class FileGitHubMetrics:
         self.total_commits = 0
         self.code_churn = 0
 
-    def toJSON(self):
-        return json.dumps(self, default=lambda o: o.__dict__,
-                          sort_keys=True, indent=4)
+    def load_from_dict(self, dictionary: dict):
+        self.__dict__.update(dictionary)
 
 
 def fetch_vsc_info(since: datetime) -> Dict[str, FileGitHubMetrics]:
@@ -30,6 +29,10 @@ def fetch_vsc_info(since: datetime) -> Dict[str, FileGitHubMetrics]:
     try:
         with open(cache_path) as json_file:
             data = json.load(json_file)
+            for k,v in data.items():
+                obj = FileGitHubMetrics(k)
+                obj.load_from_dict(v)
+                data[k] = obj
             return data
     except FileNotFoundError as e:
         print(f"No github metrics cache found, fetching all commits GitHub...")
