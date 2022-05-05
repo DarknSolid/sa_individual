@@ -7,6 +7,7 @@ from typing import List, Set
 from utils import *
 from datetime import datetime, timedelta
 from module_metrics import get_LOC_of_file, FileGitHubMetrics, fetch_vsc_info
+from collections import defaultdict
 
 
 class Node:
@@ -124,42 +125,29 @@ def dependencies_digraph(nodes: List[Node], filterMaster: FilterMaster):
     return G
 
 
-def format_list(G: networkx.DiGraph, nodes: List[Node], input_list, default_value):
-    """
-    formats a list of info for nodes, e.g. node_size. This is required as there does not exist a node for each import.
-    Specificlly: there may be more nodes in the graph than in the list of nodes used to create the graph.
-    This method formats the list of data to be of same length
-    :param G: the final graph to draw
-    :param nodes: the list of nodes used to create the graph
-    :param input_list: the list of data for each node
-    :param default_value: a default value to add to the new items in the formatted list which are not part of the input nodes
-    :return: the formatted list
-    """
-    new_list = []
-    count = 0
-    for node in G.nodes:
-        # check if it is in the nodes list
-        is_not_an_import = any(n.module_name == node for n in nodes)
-        if is_not_an_import:
-            new_list.append(input_list[count])
-            count += 1
-        else:
-            new_list.append(default_value)
+def generate_graph_compatible_node_property_list(graph: networkx.DiGraph, node_property_extractor, nodes: List[Node], default_value):
+    node_to_value = defaultdict(lambda: default_value)
+    for node in nodes:
+        node_to_value[node.module_name] = node_property_extractor(node)
 
-    return new_list
+    result = []
+    for node in graph.nodes:
+        result.append(node_to_value.get(node))
+    return result
 
 
-def generate_node_colors_from_code_churn(nodes: List[Node]):
+def generate_node_colors_from_code_churn(graph: networkx.DiGraph, nodes: List[Node]):
     code_churns = [n.code_churn for n in nodes]
-    colors = []
     limit = max(code_churns)
-    for churn in code_churns:
-        colors.append(blueToRedFade(churn, max=limit))
-    return format_list(DG, nodes, colors, '#00d4e9')
+    module_to_color = dict()
+    for node in nodes:
+        node.code_churn_color = blueToRedFade(node.code_churn, max=limit)
+        module_to_color[node.module_name] = blueToRedFade(node.code_churn, max=limit)
+
+    return generate_graph_compatible_node_property_list(graph, lambda n: module_to_color[n.module_name], nodes, '#00d4e9')
 
 
 def draw_graph_with_labels(G, node_sizes, node_color='#00d4e9', figsize=(10, 10)):
-
     plt.figure(figsize=figsize)
     nx.draw(G,
             node_size=node_sizes,
@@ -181,12 +169,13 @@ nodes = keep_nodes(nodes, filterMaster=fm)
 
 DG = dependencies_digraph(nodes=nodes, filterMaster=fm)
 
+node_sizes = generate_graph_compatible_node_property_list(graph=DG, node_property_extractor=lambda n: n.lines_of_code,
+                                                          nodes=nodes, default_value=0)
 
-node_sizes = [n.lines_of_code for n in nodes]
-node_sizes = format_list(DG, nodes, node_sizes, 0)
+node_colors = generate_node_colors_from_code_churn(graph=DG, nodes=nodes)
 
-node_colors = generate_node_colors_from_code_churn(nodes=nodes)
 for node in nodes:
-    print(f'{node.module_name}: {node.code_churn}')
+    print(f'{node.module_name}: {node.lines_of_code}')
+
 
 draw_graph_with_labels(DG, node_sizes=node_sizes, node_color=node_colors, figsize=(8, 4))
