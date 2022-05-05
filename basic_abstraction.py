@@ -134,7 +134,8 @@ def dependencies_digraph(nodes: List[Node], filterMaster: FilterMaster):
 def generate_graph_compatible_node_property_list(graph: networkx.MultiDiGraph, node_property_extractor, nodes: List[Node], default_value):
     node_to_value = defaultdict(lambda: default_value)
     for node in nodes:
-        node_to_value[node.module_name] = node_property_extractor(node)
+        value = node_property_extractor(node)
+        node_to_value[node.module_name] = value
 
     result = []
     for node in graph.nodes:
@@ -151,6 +152,33 @@ def generate_node_colors_from_code_churn(graph: networkx.MultiDiGraph, nodes: Li
         module_to_color[node.module_name] = blueToRedFade(node.code_churn, max=limit)
 
     return generate_graph_compatible_node_property_list(graph, lambda n: module_to_color[n.module_name], nodes, '#00d4e9')
+
+
+def convert_imports_to_nodes_filtered(all_nodes: dict, fm: FilterMaster, original_nodes: List[Node], ):
+    temp = []
+    # create a set for performance lookup on module names:
+    node_module_names = set()
+    for n in original_nodes:
+        node_module_names.add(n.module_name)
+    # add all imports if they are nodes and passes the filtermaster's conditions
+    for n in original_nodes:
+        for imp in n.imports.keys():
+            if imp not in node_module_names and imp in all_nodes and fm.runGraphNode(imp):
+                saved_node = all_nodes[imp]
+                temp.append(saved_node)
+    # remove all of the import node's imports that are not related to the original set of nodes to whom it was imported from.
+    for n in temp:
+        to_delete = []
+        for imp in n.imports.keys():
+            if imp not in node_module_names:
+                to_delete.append(imp)
+        for imp in to_delete:
+            n.imports.pop(imp)
+
+    for n in temp:
+        original_nodes.append(n)
+
+    return original_nodes
 
 
 def draw_graph_with_labels(G, node_sizes, node_color='#00d4e9', figsize=(8, 8)):
@@ -175,13 +203,23 @@ def draw_graph_with_labels(G, node_sizes, node_color='#00d4e9', figsize=(8, 8)):
 
 fm = FilterMaster()
 # is_system_module:
-fm.add_node_condition(lambda node: node.module_name.startswith("zeeguu.api.api"))
+fm.add_node_condition(lambda node: node.module_name.startswith("zeeguu.core."))
 # only show internal dependencies
-fm.add_graph_condition(lambda name: name.startswith("zeeguu.core."))
+fm.add_graph_condition(lambda name: name.startswith("zeeguu.api."))
+fm.add_node_condition(lambda node: any([imp.startswith("zeeguu.api") for imp in node.imports.keys()]))
 
 nodes = create_nodes()
-#nodes = merge_nodes_to_top_level(nodes=nodes, depth=1)
+#nodes = merge_nodes_to_top_level(nodes=nodes, depth=2)
+
+# 1 SAFE THE NODES
+all_nodes = dict()
+for n in nodes:
+    all_nodes[n.module_name] = n
+
 nodes = keep_nodes(nodes, filterMaster=fm)
+
+# IMPORTANT Only shows the outside module's dependencies to the internal module view
+nodes = convert_imports_to_nodes_filtered(all_nodes=all_nodes, fm=fm, original_nodes=nodes)
 
 DG = dependencies_digraph(nodes=nodes, filterMaster=fm)
 
