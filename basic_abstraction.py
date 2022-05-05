@@ -67,7 +67,7 @@ def merge_nodes_to_top_level(nodes: List[Node], depth=1) -> List[Node]:
             existing_node.code_churn += node.code_churn
             existing_node.total_commits += node.total_commits
 
-    # fix imports
+    # rename all imports to their top level name:
     ls = [v for k, v in merged.items()]
     for node in ls:
         new_imports = defaultdict(lambda :0)
@@ -153,8 +153,8 @@ def generate_node_colors_from_code_churn(graph: networkx.MultiDiGraph, nodes: Li
     return generate_graph_compatible_node_property_list(graph, lambda n: module_to_color[n.module_name], nodes, '#00d4e9')
 
 
-def draw_graph_with_labels(G, node_sizes, node_color='#00d4e9', figsize=(10, 10)):
-    pos = nx.spring_layout(G)
+def draw_graph_with_labels(G, node_sizes, node_color='#00d4e9', figsize=(8, 8)):
+    pos = nx.spring_layout(G, seed=100)
     plt.figure(figsize=figsize)
     nx.draw(G,
             node_size=node_sizes,
@@ -168,19 +168,19 @@ def draw_graph_with_labels(G, node_sizes, node_color='#00d4e9', figsize=(10, 10)
         pos,
         edge_labels=dict([((n1, n2), d['references'])
                           for n1, n2, d in G.edges(data=True)]),
-        label_pos=0.15,
+        label_pos=0.3,
     )
     plt.show()
 
 
 fm = FilterMaster()
 # is_system_module:
-fm.add_node_condition(lambda node: node.module_name.startswith("zeeguu."))
+fm.add_node_condition(lambda node: node.module_name.startswith("zeeguu.api.api"))
 # only show internal dependencies
-fm.add_graph_condition(lambda name: name.startswith("zeeguu."))
+fm.add_graph_condition(lambda name: name.startswith("zeeguu.core."))
 
 nodes = create_nodes()
-nodes = merge_nodes_to_top_level(nodes=nodes, depth=2)
+#nodes = merge_nodes_to_top_level(nodes=nodes, depth=1)
 nodes = keep_nodes(nodes, filterMaster=fm)
 
 DG = dependencies_digraph(nodes=nodes, filterMaster=fm)
