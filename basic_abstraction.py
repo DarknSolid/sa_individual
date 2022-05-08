@@ -1,26 +1,38 @@
 import networkx
 import networkx as nx
 import matplotlib.pyplot as plt
+from filter_master import FilterMaster
 from imports_finder import *
 from pathlib import Path
-from typing import List, Set
+from typing import List
+from node import Node
 from utils import *
 from datetime import datetime, timedelta
-from module_metrics import get_LOC_of_file, FileGitHubMetrics, fetch_vsc_info
+from module_metrics import get_LOC_of_file, fetch_vsc_info
 from collections import defaultdict
 
 
-draw_third_party_dependencies = True
+DRAW_THIRD_PARTY_DEPENDENCIES = False
+SEED = 100
 
+fm = FilterMaster()
+fm.add_node_condition(lambda node: node.module_name != "zeeguu.core")
+fm.add_node_condition(lambda node: node.module_name.startswith("zeeguu.core"))
+#fm.add_node_condition(lambda node: node.module_name != "zeeguu.core.model")
+fm.add_node_condition(lambda node: node.module_name != "zeeguu.core.util")
+fm.add_node_condition(lambda node: node.module_name != "zeeguu.core.configuration")
+fm.add_node_condition(lambda node: node.module_name != "zeeguu.core.test")
+fm.add_node_condition(lambda node: node.module_name != "zeeguu.core.constants")
 
-class Node:
-    def __init__(self, file_path: str, module_name: str, imports: defaultdict, lines_of_code: int, code_churn: int, total_commits: int):
-        self.file_path = file_path
-        self.module_name = module_name
-        self.lines_of_code = lines_of_code
-        self.imports = imports
-        self.code_churn = code_churn
-        self.total_commits = total_commits
+# only show internal dependencies
+#fm.add_node_condition(lambda node: any([imp.startswith("zeeguu.api") for imp in node.imports.keys()]))
+fm.add_graph_condition(lambda name: name != "zeeguu.core")
+#fm.add_graph_condition(lambda name: name != "zeeguu.core.model")
+fm.add_graph_condition(lambda name: name != "zeeguu.core.configuration")
+fm.add_graph_condition(lambda name: name != "zeeguu.core.util")
+fm.add_graph_condition(lambda name: name != "zeeguu.core.test")
+fm.add_graph_condition(lambda name: name != "zeeguu.core.constants")
+fm.add_graph_condition(lambda name: name.startswith("zeeguu.core"))
 
 
 def create_nodes():
@@ -84,32 +96,6 @@ def merge_nodes_to_top_level(nodes: List[Node], depth=1) -> List[Node]:
     return ls
 
 
-class FilterMaster:
-    def __init__(self):
-        self._node_conditions = []
-        self._graph_conditions = []
-
-    def add_node_condition(self, condition):
-        self._node_conditions.append(condition)
-
-    def add_graph_condition(self, condition):
-        self._graph_conditions.append(condition)
-
-    def runNode(self, node:Node) -> bool:
-        # all conditions must pass
-        for condition in self._node_conditions:
-            if not condition(node):
-                return False
-        return True
-
-    def runGraphNode(self, node:str) -> bool:
-        # all conditions must pass
-        for condition in self._graph_conditions:
-            if not condition(node):
-                return False
-        return True
-
-
 def keep_nodes(nodes: List[Node], filterMaster):
     filtered_nodes = []
 
@@ -121,7 +107,7 @@ def keep_nodes(nodes: List[Node], filterMaster):
 
 def dependencies_digraph(nodes: List[Node], filterMaster: FilterMaster):
     G = nx.MultiDiGraph()
-    global draw_third_party_dependencies
+    global DRAW_THIRD_PARTY_DEPENDENCIES
 
     for node in nodes:
         if node.module_name not in G.nodes:
@@ -130,7 +116,7 @@ def dependencies_digraph(nodes: List[Node], filterMaster: FilterMaster):
         for imp, references in node.imports.items():
             # an import should have an edge drawn from the node if the import is a node
             is_imp_a_node = any(n.module_name == imp for n in nodes)
-            if not is_imp_a_node and draw_third_party_dependencies is not True:
+            if not is_imp_a_node and DRAW_THIRD_PARTY_DEPENDENCIES is not True:
                 continue
             if is_imp_a_node or filterMaster.runGraphNode(imp):
                 G.add_edge(node.module_name, imp, references=references)
@@ -189,8 +175,8 @@ def convert_imports_to_nodes_filtered(all_nodes: dict, fm: FilterMaster, origina
 
 
 def draw_graph_with_labels(G, node_sizes, node_color='#00d4e9', figsize=(8, 8)):
-    #seed = 100
-    pos = nx.spring_layout(G, seed=100)
+    global SEED
+    pos = nx.spring_layout(G, seed=SEED)
     plt.figure(figsize=figsize)
     nx.draw(G,
             node_size=node_sizes,
@@ -209,19 +195,8 @@ def draw_graph_with_labels(G, node_sizes, node_color='#00d4e9', figsize=(8, 8)):
     plt.show()
 
 
-fm = FilterMaster()
-# is_system_module:
-fm.add_node_condition(lambda node: node.module_name.startswith("zeeguu.core.model"))
-
-# only show internal dependencies
-#fm.add_graph_condition(lambda name: name.startswith("zeeguu.api"))
-fm.add_graph_condition(lambda name: name.startswith("zeeguu.core.model"))
-#fm.add_node_condition(lambda node: any([imp.startswith("zeeguu.api") for imp in node.imports.keys()]))
-
-draw_third_party_dependencies = False
-
 nodes = create_nodes()
-nodes = merge_nodes_to_top_level(nodes=nodes, depth=4)
+nodes = merge_nodes_to_top_level(nodes=nodes, depth=3)
 
 # 1 SAFE THE NODES
 all_nodes = dict()
