@@ -1,1 +1,1 @@
-CODE_ROOT_FOLDER = "../zeeguu-api/"
+CODE_ROOT_FOLDER = "..\\zeeguu-api\\"
